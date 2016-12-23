@@ -958,6 +958,108 @@ var _16 = function(redrawService0) {
 	}
 }
 m.mount = _16(redrawService)
+var guid = 0, HALT = {}
+function createStream() {
+	function stream() {
+		if (arguments.length > 0 && arguments[0] !== HALT) updateStream(stream, arguments[0])
+		return stream._state.value
+	}
+	initStream(stream)
+	if (arguments.length > 0 && arguments[0] !== HALT) updateStream(stream, arguments[0])
+	return stream
+}
+function initStream(stream) {
+	stream.constructor = createStream
+	stream._state = {id: guid++, value: undefined, state: 0, derive: undefined, recover: undefined, deps: {}, parents: [], endStream: undefined}
+	stream.map = stream["fantasy-land/map"] = map0, stream["fantasy-land/ap"] = ap, stream["fantasy-land/of"] = createStream
+	stream.valueOf = valueOf, stream.toJSON = toJSON, stream.toString = valueOf
+	Object.defineProperties(stream, {
+		end: {get: function() {
+			if (!stream._state.endStream) {
+				var endStream = createStream()
+				endStream.map(function(value) {
+					if (value === true) unregisterStream(stream), unregisterStream(endStream)
+					return value
+				})
+				stream._state.endStream = endStream
+			}
+			return stream._state.endStream
+		}}
+	})
+}
+function updateStream(stream, value) {
+	updateState(stream, value)
+	for (var id in stream._state.deps) updateDependency(stream._state.deps[id], false)
+	finalize0(stream)
+}
+function updateState(stream, value) {
+	stream._state.value = value
+	stream._state.changed = true
+	if (stream._state.state !== 2) stream._state.state = 1
+}
+function updateDependency(stream, mustSync) {
+	var state = stream._state, parents = state.parents
+	if (parents.length > 0 && parents.every(active0) && (mustSync || parents.some(changed))) {
+		var value = stream._state.derive()
+		if (value === HALT) return false
+		updateState(stream, value)
+	}
+}
+function finalize0(stream) {
+	stream._state.changed = false
+	for (var id in stream._state.deps) stream._state.deps[id]._state.changed = false
+}
+function combine(fn, streams) {
+	if (!streams.every(valid)) throw new Error("Ensure that each item passed to m.prop.combine/m.prop.merge is a stream")
+	return initDependency(createStream(), streams, function() {
+		return fn.apply(this, streams.concat([streams.filter(changed)]))
+	})
+}
+function initDependency(dep, streams, derive) {
+	var state = dep._state
+	state.derive = derive
+	state.parents = streams.filter(notEnded)
+	registerDependency(dep, state.parents)
+	updateDependency(dep, true)
+	return dep
+}
+function registerDependency(stream, parents) {
+	for (var i = 0; i < parents.length; i++) {
+		parents[i]._state.deps[stream._state.id] = stream
+		registerDependency(stream, parents[i]._state.parents)
+	}
+}
+function unregisterStream(stream) {
+	for (var i = 0; i < stream._state.parents.length; i++) {
+		var parent0 = stream._state.parents[i]
+		delete parent0._state.deps[stream._state.id]
+	}
+	for (var id in stream._state.deps) {
+		var dependent = stream._state.deps[id]
+		var index0 = dependent._state.parents.indexOf(stream)
+		if (index0 > -1) dependent._state.parents.splice(index0, 1)
+	}
+	stream._state.state = 2 //ended
+	stream._state.deps = {}
+}
+function map0(fn) {return combine(function(stream) {return fn(stream())}, [this])}
+function ap(stream) {return combine(function(s1, s2) {return s1()(s2())}, [stream, this])}
+function valueOf() {return this._state.value}
+function toJSON() {return this._state.value != null && typeof this._state.value.toJSON === "function" ? this._state.value.toJSON() : this._state.value}
+function valid(stream) {return stream._state }
+function active0(stream) {return stream._state.state === 1}
+function changed(stream) {return stream._state.changed}
+function notEnded(stream) {return stream._state.state !== 2}
+function merge(streams) {
+	return combine(function() {
+		return streams.map(function(s) {return s()})
+	}, streams)
+}
+createStream["fantasy-land/of"] = createStream
+createStream.merge = merge
+createStream.combine = combine
+createStream.HALT = HALT
+m.prop = createStream
 var Promise = PromisePolyfill
 var parseQueryString = function(string) {
 	if (string === "" || string == null) return {}
@@ -966,9 +1068,9 @@ var parseQueryString = function(string) {
 	for (var i = 0; i < entries.length; i++) {
 		var entry = entries[i].split("=")
 		var key5 = decodeURIComponent(entry[0])
-		var value = entry.length === 2 ? decodeURIComponent(entry[1]) : ""
-		if (value === "true") value = true
-		else if (value === "false") value = false
+		var value0 = entry.length === 2 ? decodeURIComponent(entry[1]) : ""
+		if (value0 === "true") value0 = true
+		else if (value0 === "false") value0 = false
 		var levels = key5.split(/\]\[?|\[/)
 		var cursor = data0
 		if (key5.indexOf("[") > -1) levels.pop()
@@ -982,7 +1084,7 @@ var parseQueryString = function(string) {
 				level = counters[key5]++
 			}
 			if (cursor[level] == null) {
-				cursor[level] = isValue ? value : isNumber ? [] : {}
+				cursor[level] = isValue ? value0 : isNumber ? [] : {}
 			}
 			cursor = cursor[level]
 		}
@@ -1046,11 +1148,11 @@ var coreRouter = function($window) {
 		var hash = buildQueryString(hashData)
 		if (hash) path += "#" + hash
 		if (supportsPushState) {
-			var state = options ? options.state : null
+			var state0 = options ? options.state : null
 			var title = options ? options.title : null
 			$window.onpopstate()
-			if (options && options.replace) $window.history.replaceState(state, title, router.prefix + path)
-			else $window.history.pushState(state, title, router.prefix + path)
+			if (options && options.replace) $window.history.replaceState(state0, title, router.prefix + path)
+			else $window.history.pushState(state0, title, router.prefix + path)
 		}
 		else $window.location.href = router.prefix + path
 	}
@@ -1060,9 +1162,9 @@ var coreRouter = function($window) {
 			var params = {}
 			var pathname = parsePath(path, params, params)
 			
-			var state = $window.history.state
-			if (state != null) {
-				for (var k in state) params[k] = state[k]
+			var state0 = $window.history.state
+			if (state0 != null) {
+				for (var k in state0) params[k] = state0[k]
 			}
 			for (var route0 in routes) {
 				var matcher = new RegExp("^" + route0.replace(/:[^\/]+?\.{3}/g, "(.*?)").replace(/:[^\/]+/g, "([^\\/]+)") + "\/?$")
@@ -1088,7 +1190,7 @@ var coreRouter = function($window) {
 	
 	return router
 }
-var _20 = function($window, redrawService0) {
+var _22 = function($window, redrawService0) {
 	var routeService = coreRouter($window)
 	var identity = function(v) {return v}
 	var render1, component, attrs3, currentPath, lastUpdate
@@ -1139,14 +1241,14 @@ var _20 = function($window, redrawService0) {
 	}
 	return route
 }
-m.route = _20(window, redrawService)
+m.route = _22(window, redrawService)
 m.withAttr = function(attrName, callback1, context) {
 	return function(e) {
 		return callback1.call(context || this, attrName in e.currentTarget ? e.currentTarget[attrName] : e.currentTarget.getAttribute(attrName))
 	}
 }
-var _28 = coreRenderer(window)
-m.render = _28.render
+var _30 = coreRenderer(window)
+m.render = _30.render
 m.redraw = redrawService.redraw
 m.request = requestService.request
 m.jsonp = requestService.jsonp
