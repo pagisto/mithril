@@ -7,6 +7,7 @@ var redrawService = require("./redraw")
 requestService.setCompletionCallback(redrawService.redraw)
 
 m.mount = require("./mount")
+m.prop = require("./stream")
 m.route = require("./route")
 m.withAttr = require("./util/withAttr")
 m.render = require("./render").render
